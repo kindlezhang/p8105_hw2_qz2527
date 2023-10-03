@@ -6,25 +6,91 @@ output: github_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readxl)
 ```
 
-## R Markdown
+## Problem 1
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+First, clean the data in `pols-month.csv`. Use `separate()` to break up the variable
+`mon` into integer variables `year`, `month`, and `day`; replace month number with month
+name; create a `president` variable taking values `gop` and `dem`, and remove `prez_dem`
+and `prez_gop`; and remove the day variable.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+```{r}
 
-```{r cars}
-summary(cars)
+month_df = 
+  tibble(
+    month_num = 1:12,
+    month_abb = month.abb,
+    month = month.name
+  )
+
+my_data_1 = read.csv("data_file/pols-month.csv") |> 
+  janitor::clean_names() |> 
+  separate(mon, into = c("year", "month", "day"), "-") |> 
+  mutate(
+    year = as.numeric(year),
+    month = as.numeric(month),
+    day = as.numeric(day)) |> 
+  mutate(
+    month = case_match(
+        month,
+        01 ~ "January",
+        02 ~ "February",
+        03 ~ "March",
+        04 ~ "April",
+        05 ~ "May",
+        06 ~ "June",
+        07 ~ "July",
+        08 ~ "August",
+        09 ~ "September",
+        10 ~ "October",
+        11 ~ "November",
+        12 ~ "December",
+      )
+  ) |> 
+  mutate(president = recode(prez_gop, "0" = "dem", "1" = "gop", "2" = "gop")) |> 
+  select(year, month, everything(), -day, -starts_with("prez"))
 ```
 
-## Including Plots
+Second, clean the data in `snp.csv` using a similar process to the above. For consistency across datasets, arrange according to year and month, and organize so that `year` and `month` are the leading columns.
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r clean data}
+my_data_2 = 
+  read_csv(
+    "data_file/snp.csv",
+    col_types = cols(date = col_date(format = "%m/%d/%y"))) |> 
+  janitor::clean_names() |> 
+  separate(date, into = c("year","month_num", "day"), convert = TRUE) |> 
+  mutate(year = if_else(year>2023, year-100, year)) |> 
+  left_join(x = _, y = month_df) |> 
+  select(year, month, close)
+  
 ```
+Third, tidy the unemployment data so that it can be merged with the previous datasets. This process will involve switching from “wide” to “long” format; ensuring that key variables have the same name; and ensuring that key variables take the same values.
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+my_data_3 = 
+  read_csv("./data_file/unemployment.csv") |> 
+  rename(year = Year)|> 
+  pivot_longer(
+    Jan:Dec,
+    names_to = "month_abb",
+    values_to = "unemployment"
+  ) |> 
+  left_join(x = _, y = month_df) |> 
+  select(year, month, unemployment)
+```
+Join the datasets by merging `snp` into `pols`, and merging `unemployment` into the result.
+
+```{r}
+data_new = 
+  left_join(my_data_1, my_data_2) |> 
+  left_join(x = _, y = my_data_3)
+  
+str(data_new)
+```
+Let's talk about the 538 data_new. The `my_data_1` data has `r nrow(my_data_1)` observations and `r ncol(my_data_1)` variables and tells us about the party affiliation distribution (democrat or republican) for governors and senators for a given year from years `r my_data_1 |> pull(year) |> min()` to `r my_data_2 |> pull(year) |> max()`. It also tells us whether the sitting president was a democrat or republican. The `my_data_2` data has `r nrow(my_data_2)` observations and `r ncol(my_data_2)` variables, ranging from years `r my_data_2 |> pull(year) |> min()` to `r my_data_2 |> pull(year) |> max()`. The `my_data_3` data has `r nrow(my_data_3)` observations and `r ncol(my_data_3)` variables ranging from years `r my_data_3 |> pull(year) |> min()` to `r my_data_3 |> pull(year) |> max()`. In Januarys in or after 1975 in which a democrat was president, the **average unemployment rate was `r filter(data_new, month == "January", year >= 1975, president == "dem") |> pull(unemployment) |> mean() |> round(2)`**.  The average unemployment rate over the same time period in which a republican was president was `r filter(data_new, month == "January", year >= 1975, president == "gop") |> pull(unemployment) |> mean() |> round(2)`.
+
+## Problem 2
