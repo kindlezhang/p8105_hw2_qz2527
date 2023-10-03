@@ -7,7 +7,6 @@ output: github_document
 
 ```{r setup, include=FALSE}
 library(tidyverse)
-library(readxl)
 ```
 
 ## Problem 1
@@ -94,3 +93,80 @@ str(data_new)
 Let's talk about the 538 data_new. The `my_data_1` data has `r nrow(my_data_1)` observations and `r ncol(my_data_1)` variables and tells us about the party affiliation distribution (democrat or republican) for governors and senators for a given year from years `r my_data_1 |> pull(year) |> min()` to `r my_data_2 |> pull(year) |> max()`. It also tells us whether the sitting president was a democrat or republican. The `my_data_2` data has `r nrow(my_data_2)` observations and `r ncol(my_data_2)` variables, ranging from years `r my_data_2 |> pull(year) |> min()` to `r my_data_2 |> pull(year) |> max()`. The `my_data_3` data has `r nrow(my_data_3)` observations and `r ncol(my_data_3)` variables ranging from years `r my_data_3 |> pull(year) |> min()` to `r my_data_3 |> pull(year) |> max()`. In Januarys in or after 1975 in which a democrat was president, the **average unemployment rate was `r filter(data_new, month == "January", year >= 1975, president == "dem") |> pull(unemployment) |> mean() |> round(2)`**.  The average unemployment rate over the same time period in which a republican was president was `r filter(data_new, month == "January", year >= 1975, president == "gop") |> pull(unemployment) |> mean() |> round(2)`.
 
 ## Problem 2
+
+Read and clean the Mr. Trash Wheel sheet:
+* specify the sheet in the Excel file and to omit non-data entries (rows with notes / figures; columns containing notes) using arguments in `read_excel`
+* use reasonable variable names
+* omit rows that do not include dumpster-specific data
+
+```{r, incluse = FALSE}
+library(readxl)
+```
+
+```{r}
+data_tw = 
+  read_excel("./data_file/202309_tw.xlsx", 
+             sheet = "Mr. Trash Wheel",
+             range = "A2:M586") |> 
+  janitor::clean_names() |> 
+  filter(!is.na(dumpster)) |> 
+  mutate(
+    year = as.numeric(year)
+  )
+```
+The data include a column for the (approximate) number of homes powered. This calculation is described in the `Homes powered note`, but not applied to every row in the dataset. Update the data to include a new `homes_powered` variable based on this calculation.
+
+```{r}
+data_tw = 
+mutate(
+  data_tw,
+  homes_powered = (weight_tons * 500) / 30
+  )
+```
+Use a similar process to import, clean, and organize the data for Professor Trash Wheel and Gwynnda, and combine these with the Mr. Trash Wheel dataset to produce a single tidy dataset. To keep track of which Trash Wheel is which, you may need to add an additional variable to all datasets before combining.
+
+```{r}
+data_ptw = 
+  read_excel("./data_file/202309_tw.xlsx", 
+             sheet = "Professor Trash Wheel",
+             range = "A2:L108") |> 
+  janitor::clean_names() |> 
+  filter(!is.na(dumpster)) |> 
+  mutate(homes_powered = (weight_tons * 500) / 30)
+
+data_gtw = 
+  read_excel("./data_file/202309_tw.xlsx", 
+             sheet = "Gwynnda Trash Wheel",
+             range = "A2:K157") |> 
+  janitor::clean_names() |> 
+  filter(!is.na(dumpster)) |> 
+  mutate(homes_powered = (weight_tons * 500) / 30)
+```
+```{r}
+data_tw = 
+  mutate(
+    data_tw,
+    trash_wheel_kind = "Mr. Trash Wheel"
+  )
+
+data_ptw = 
+  mutate(
+    data_ptw,
+    trash_wheel_kind = "Professor Trash Wheel"
+  )
+
+data_gtw = 
+  mutate(
+    data_gtw,
+    trash_wheel_kind = "Gwynnda Trash Wheel"
+  )
+data_tw_all = 
+  bind_rows(data_tw, data_ptw, data_gtw)
+
+str(data_tw_all)
+```
+Write a paragraph about these data; you are encouraged to use inline R. Be sure to note the number of observations in the resulting dataset, and give examples of key variables. For available data, what was the total weight of trash collected by Professor Trash Wheel? What was the total number of cigarette butts collected by Gwynnda in July of 2021?
+
+Let's talk about the data_tw_all. The `data_tw` data has `r nrow(data_tw)` observations and `r ncol(data_tw)` variables and tells us about the  information on the dumpter number, date of collection, amount of total litter and litter type for a given year from years `r data_tw |> pull(year) |> min()` to `r data_tw |> pull(year) |> max()`. It also tells us the homes powered. The `data_ptw` data has `r nrow(data_ptw)` observations and `r ncol(data_ptw)` variables, ranging from years `r data_ptw |> pull(year) |> min()` to `r data_ptw |> pull(year) |> max()`. The `data_gtw` data has `r nrow(data_gtw)` observations and `r ncol(data_gtw)` variables ranging from years `r data_gtw |> pull(year) |> min()` to `r data_gtw |> pull(year) |> max()`. 
+
+The total weight of trash collected by Professor Trash Wheel is `r filter(data_tw_all, trash_wheel_kind == "Professor Trash Wheel") |> pull(weight_tons) |> sum()` tons. The total number of cigarette butts collected by Gwynnda in July of 2021 is `r filter(data_tw_all, trash_wheel_kind == "Gwynnda Trash Wheel" & year == 2021 & month == "July") |> pull(cigarette_butts) |> sum(digit = 0)`
