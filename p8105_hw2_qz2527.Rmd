@@ -170,3 +170,61 @@ Write a paragraph about these data; you are encouraged to use inline R. Be sure 
 Let's talk about the data_tw_all. The `data_tw` data has `r nrow(data_tw)` observations and `r ncol(data_tw)` variables and tells us about the  information on the dumpter number, date of collection, amount of total litter and litter type for a given year from years `r data_tw |> pull(year) |> min()` to `r data_tw |> pull(year) |> max()`. It also tells us the homes powered. The `data_ptw` data has `r nrow(data_ptw)` observations and `r ncol(data_ptw)` variables, ranging from years `r data_ptw |> pull(year) |> min()` to `r data_ptw |> pull(year) |> max()`. The `data_gtw` data has `r nrow(data_gtw)` observations and `r ncol(data_gtw)` variables ranging from years `r data_gtw |> pull(year) |> min()` to `r data_gtw |> pull(year) |> max()`. 
 
 The total weight of trash collected by Professor Trash Wheel is `r filter(data_tw_all, trash_wheel_kind == "Professor Trash Wheel") |> pull(weight_tons) |> sum()` tons. The total number of cigarette butts collected by Gwynnda in July of 2021 is `r filter(data_tw_all, trash_wheel_kind == "Gwynnda Trash Wheel" & year == 2021 & month == "July") |> pull(cigarette_butts) |> sum(digit = 0)`
+
+## Problem 3
+
+Import, clean, and tidy the dataset of baseline demographics.
+
+```{r}
+data_mb = 
+  read_csv("./data_file/MCI_baseline.csv", skip = 1)|> 
+  janitor::clean_names()
+```
+Ensure that sex and APOE4 carrier status are appropriate encoded (i.e. not numeric), and remove any participants who do not meet the stated inclusion criteria (i.e. no MCI at baseline).
+
+```{r}
+data_mb_new = 
+  mutate(
+    data_mb,
+    sex = recode(sex, "1" = "male", "0" = "female")
+  ) |> 
+  mutate(
+    apoe4 = recode(apoe4, "1" = "carrier", "0" = "non-carrier")
+  ) |> 
+  filter(age_at_onset == ".")
+```
+
+* In the importing process, we should skip the first line cause it's the explanatory note to the variable.
+* We should transmit the `sex` and `apoe4` to a character.
+* We should delete the participants who are not qualified because of getting a MIC in the baseline time.
+
+### some conclusions:
+
+* the recruits' number is `r nrow(data_mb)`, among which `r nrow(data_mb) - nrow(data_mb_new)` ones got a MCI.
+* the average baseline age is `r data_mb_new |> pull(current_age) |> mean() |> round(digit = 2)` years old.
+* the proportion of women in the study who are APOE4 carriers is `r filter(data_mb_new, sex == "female" & apoe4 == "carrier")|> nrow()/nrow(data_mb_new)` 
+
+Similarly, import, clean, and tidy the dataset of longitudinally observed biomarker values.
+
+```{r}
+data_am = 
+  read_csv("./data_file/mci_amyloid.csv", skip = 1,
+           col_types = "iddddd")|> 
+  janitor::clean_names() |> 
+  rename(id = study_id) |> 
+  drop_na()
+```
+
+the form `data_am` records the `r nrow(data_am)` individuals' data about their amyloid β 42/40 ratio in a specific period. 
+
+Check whether some participants appear in only the baseline or amyloid datasets, and comment on your findings. Combine the demographic and biomarker datasets so that only participants who appear in both datasets are retained, and briefly describe the resulting dataset; export the result as a CSV to your data directory
+
+```{r}
+data_final =
+  left_join(data_mb_new, data_am, by = "id")
+
+data_final_2 = 
+  drop_na(data_final) |> 
+  write.table("./data_file/data_final.csv", row.names = FALSE, col.names = TRUE, sep = ",")
+```
+There are some participants appear in only the baseline or amyloid datasets. There're `r nrow(data_final_2)` individuals retain in the final form.
